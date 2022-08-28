@@ -1,7 +1,83 @@
 #introduction to py.game
 import pygame
 from sys import exit # used to exit python
-from random import randint
+from random import randint, choice
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        player_walk_1 = pygame.image.load('pygame tutorial\player_walk_1.png').convert_alpha() #convert make image easier for python to process, alpha removes white space
+        player_walk_2 = pygame.image.load('pygame tutorial\player_walk_2.png').convert_alpha()
+        self.player_walk = [player_walk_1,player_walk_2]
+        self.player_index = 0
+        self.player_jump = pygame.image.load('pygame tutorial\jump.png').convert_alpha()
+
+        self.image = self.player_walk[self.player_index]
+        self.rect = self.image.get_rect(midbottom =(80,300))
+        self.gravity = 0
+
+        self.jump_sound = pygame.mixer.Sound('pygame tutorial/audio_jump.mp3') #imports sound
+        self.jump_sound.set_volume(0.5) #volume range is from 0-1
+
+    def player_input(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE] and self.rect.bottom >=300:
+            self.gravity = -20
+            self.jump_sound.play() #plays sound when spacebar is pressed
+
+    def apply_gravity(self):
+        self.gravity += 1
+        self.rect.y += self.gravity
+        if self.rect.bottom >= 300:
+            self.rect.bottom = 300
+
+    def animation_state(self):
+        if self.rect.bottom < 300:
+            self.image = self.player_jump
+        else:
+            self.player_index += 0.1
+            if self.player_index >= len(self.player_walk):self.player_index = 0
+            self.image = self.player_walk[int(self.player_index)]
+
+    def update(self):
+        self.player_input()
+        self.apply_gravity()
+        self.animation_state()
+
+
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self,type):
+        super().__init__()
+        if type == 'fly':
+            fly_1 = pygame.image.load('pygame tutorial\Fly1.png').convert_alpha()
+            fly_2 = pygame.image.load('pygame tutorial\Fly2.png').convert_alpha()
+            self.frames = [fly_1,fly_2]
+            y_pos = 210
+        else:
+            snail_1= pygame.image.load('pygame tutorial\snail1.png').convert_alpha()
+            snail_2 = pygame.image.load('pygame tutorial\snail2.png').convert_alpha()
+            self.frames = [snail_1,snail_2]
+            y_pos = 300
+
+
+        self.animation_index = 0
+        self.image = self.frames[self.animation_index]
+        self.rect = self.image.get_rect(midbottom = (randint(900,1100),y_pos))
+
+    def animation_state(self):
+        self.animation_index += 0.1
+        if self.animation_index >= len(self.frames): self.animation_index = 0
+        self.image = self.frames[int(self.animation_index)]
+
+    def update(self):
+        self.animation_state()
+        self.rect.x -= 6
+        self.destroy()
+
+    def destroy(self):
+        if self.rect.x <= -100:
+            self.kill()
+
 
 def display_score():
     current_time = int(pygame.time.get_ticks()/1000) - start_time
@@ -10,36 +86,12 @@ def display_score():
     screen.blit(score_surf,score_rect)
     return current_time
 
-def obstacle_movement(obstacle_list):
-    if obstacle_list:
-        for obstacle_rect in obstacle_list:
-            obstacle_rect.x -= 5
+def collision_sprite():
+    if pygame.sprite.spritecollide(player.sprite,obstacle_group,False): #arguments (sprite,group, boolean); If set to True group sprite is deleted
+        obstacle_group.empty() # stop multiple collisions from occuring i.e. resets snails etc.
+        return False
+    else: return True
 
-            if obstacle_rect.bottom == 300:screen.blit(snail_surf,obstacle_rect)
-            else: screen.blit(fly_surf,obstacle_rect)
-
-            obstacle_list = [obstacle for obstacle in obstacle_list if obstacle.x > -100] #deletes rectangles if they leave the screen
-
-        return obstacle_list
-    else: return [] #none does not have an append method; timer needs to start before list contains values
-
-def collisions(player, obstacles):
-    if obstacles:
-        for obstacle_rect in obstacles:
-            if player.colliderect(obstacle_rect): return False
-    return True
-
-def player_animation():
-    global player_surf, player_index
-
-    if player_rect.bottom < 300:
-        player_surf = player_jump
-    else:
-        player_index += 0.1 #slowly increases the index so that switching images takes more time
-        if player_index>=len(player_walk): player_index = 0
-
-
-        player_surf = player_walk[int(player_index)]
 
 pygame.init() # initializes pygame module. Must be called in all pygames.
 screen = pygame.display.set_mode((800,400)) # sets window size (Display Surface - width, height)
@@ -49,37 +101,21 @@ test_font = pygame.font.Font('pygame tutorial\Pixeltype.ttf', 50) # argument (fo
 game_active = False
 start_time = 0
 score = 0
+bg_music = pygame.mixer.Sound('pygame tutorial\music.wav')
+bg_music.play(loops = -1) #loops music infinitely
+
+
+#Groups
+player = pygame.sprite.GroupSingle() #Note this is not a sprite but a group of sprites; hence we must add .sprite to spritecollision fxn
+player.add(Player())
+
+obstacle_group = pygame.sprite.Group()
 
 sky_surface = pygame.image.load('pygame tutorial\Sky.png').convert() # "C:\Users\rober\mu_code\pygame tutorial\Sky.png"
 ground_surface = pygame.image.load('pygame tutorial\ground.png').convert() # "C:\Users\rober\mu_code\pygame tutorial\ground.png"
 
 
 
-#Snail
-snail_frame1= pygame.image.load('pygame tutorial\snail1.png').convert_alpha()
-snail_frame2 = pygame.image.load('pygame tutorial\snail2.png').convert_alpha()
-snail_frames = [snail_frame1,snail_frame2]
-snail_frame_index = 0
-snail_surf = snail_frames[snail_frame_index]
-
-#Fly
-fly_frame1 = pygame.image.load('pygame tutorial\Fly1.png').convert_alpha()
-fly_frame2 = pygame.image.load('pygame tutorial\Fly2.png').convert_alpha()
-fly_frames = [fly_frame1,fly_frame2]
-fly_frame_index = 0
-fly_surf = fly_frames[fly_frame_index]
-
-obstacle_rect_list = []
-
-player_walk_1 = pygame.image.load('pygame tutorial\player_walk_1.png').convert_alpha() #convert make image easier for python to process, alpha removes white space
-player_walk_2 = pygame.image.load('pygame tutorial\player_walk_2.png').convert_alpha()
-player_walk = [player_walk_1,player_walk_2]
-player_index = 0
-player_jump = pygame.image.load('pygame tutorial\jump.png').convert_alpha()
-
-player_surf = player_walk[player_index]
-player_rect = player_surf.get_rect(midbottom =(80,300))
-player_gravity = 0
 
 #Intro Screen
 player_stand = pygame.image.load('pygame tutorial\player_stand.png').convert_alpha()
@@ -96,14 +132,6 @@ game_message_rect = game_message.get_rect(center = (400, 335))
 obstacle_timer = pygame.USEREVENT +1 #creates a custom user event (always add +1,2,3 etc. to avoid conflict with the black boxes of pygame module)
 pygame.time.set_timer(obstacle_timer,1500) #arguments (trigger, time); controls speed of obstacles
 
-snail_animation_timer = pygame.USEREVENT +2
-pygame.time.set_timer(snail_animation_timer,500)
-
-fly_animation_timer = pygame.USEREVENT +3
-pygame.time.set_timer(fly_animation_timer,200)
-
-
-
 
 
 while True: #infinite loop used to display window and avoid it automatically closing; game runs inside loop
@@ -112,71 +140,39 @@ while True: #infinite loop used to display window and avoid it automatically clo
             pygame.quit()
             exit() # exits python to avoid user seeing an error statement
 
-        if game_active:
-            if event.type ==pygame.KEYDOWN: #references pressing a key
-                if event.key ==pygame.K_SPACE and player_rect.bottom >=300: #K_SPACE references the space bar
-                    player_gravity = -20
 
-            if event.type ==pygame.MOUSEBUTTONDOWN and player_rect.bottom >=300: #references clicking the mouse button
-                if player_rect.collidepoint(event.pos): #defines the colide point to be the mouse point and the player rectangle
-                    player_gravity = -20
+        if game_active:
+            if event.type ==obstacle_timer:
+                obstacle_group.add(Obstacle(choice(['fly','snail','snail','snail'])))
+
         else:
             if event.type ==pygame.KEYDOWN and event.key ==pygame.K_SPACE:
                  game_active = True
                  start_time = int(pygame.time.get_ticks()/1000)
 
-        if game_active:
-            if event.type ==obstacle_timer:
-                if randint(0,2):
-                    obstacle_rect_list.append(snail_surf.get_rect(bottomright =(randint(900,1100),300)))
-                else:
-                    obstacle_rect_list.append(fly_surf.get_rect(bottomright =(randint(900,1100),210)))
-
-            if event.type ==snail_animation_timer:
-                if snail_frame_index == 0: snail_frame_index = 1
-                else: snail_frame_index = 0
-                snail_surf = snail_frames[snail_frame_index]
-
-            if event.type ==fly_animation_timer:
-                if fly_frame_index ==0: fly_frame_index = 1
-                else: fly_frame_index =0
-                fly_surf = fly_frames[fly_frame_index]
-
-
-
 
     if game_active:
         screen.blit(sky_surface,(0,0)) #argument x,y are the coordinates the surface appear on the display surface - always starts from top left
         screen.blit(ground_surface,(0,300))
-
         score = display_score()
 
-        #Obstacle movement
-        obstacle_rect_list = obstacle_movement(obstacle_rect_list)
+        player.draw(screen) #.blit cannot be used with sprites
+        player.update()
 
+        obstacle_group.draw(screen)
+        obstacle_group.update()
 
-        #Player
-        player_gravity += 1
-        player_rect.y += player_gravity
-        if player_rect.bottom >= 300: player_rect.bottom = 300
-        player_animation()
-        screen.blit(player_surf,player_rect)
+        game_active = collision_sprite()
 
-        #collision
-        game_active = collisions(player_rect,obstacle_rect_list) #changes value to false if collision occurs via collisions function
 
     else:
         screen.fill((94,129,162))
         screen.blit(player_stand, player_stand_rect)
-        obstacle_rect_list.clear() #needed to reset objects to default positions or will continue to have collisions
-        player_rect.midbottom = (80,300) #resets player position
-        player_gravity = 0 #resets player gravity
         screen.blit(game_name,game_name_rect)
-
-
 
         score_message = test_font.render(f'Your score: {score}',False,(111,196,169))
         score_message_rect = score_message.get_rect(center = (400,330))
+
         if score == 0: screen.blit(game_message,game_message_rect)
         else: screen.blit(score_message,score_message_rect)
 
@@ -235,3 +231,109 @@ while True: #infinite loop used to display window and avoid it automatically clo
 
 #snail_surf = pygame.image.load('pygame tutorial\snail1.png').convert_alpha() #"C:\Users\rober\mu_code\pygame tutorial\snail1.png"
 #fly_surf = pygame.image.load('pygame tutorial\Fly1.png').convert_alpha()
+
+
+#player_gravity += 1
+#player_rect.y += player_gravity
+#if player_rect.bottom >= 300: player_rect.bottom = 300
+
+                #if randint(0,2):
+                 #   obstacle_rect_list.append(snail_surf.get_rect(bottomright =(randint(900,1100),300)))
+                #else:
+                 #   obstacle_rect_list.append(fly_surf.get_rect(bottomright =(randint(900,1100),210)))
+
+#player_gravity =+ 1
+  #      player_rect.y =+ player_gravity
+  #     player_animation()
+   #     screen.blit(player_surf,player_rect)
+
+   #game_active = collisions(player_rect,obstacle_rect_list) #changes value to false if collision occurs via collisions function
+   #obstacle_rect_list = obstacle_movement(obstacle_rect_list)
+
+
+  # def obstacle_movement(obstacle_list):
+ #   if obstacle_list:
+  #      for obstacle_rect in obstacle_list:
+ #           obstacle_rect.x -= 5
+
+ #           if obstacle_rect.bottom == 300:screen.blit(snail_surf,obstacle_rect)
+ #           else: screen.blit(fly_surf,obstacle_rect)
+#
+  #          obstacle_list = [obstacle for obstacle in obstacle_list if obstacle.x > -100] #deletes rectangles if they leave the screen
+#
+ #       return obstacle_list
+  #  else: return [] #none does not have an append method; timer needs to start before list contains values
+
+#def collisions(player, obstacles):
+ #   if obstacles:
+ #       for obstacle_rect in obstacles:
+ #           if player.colliderect(obstacle_rect): return False
+ #   return True
+
+#def player_animation():
+ #   global player_surf, player_index
+
+#    if player_rect.bottom < 300:
+ #       player_surf = player_jump
+ #   else:
+ #       player_index += 0.1 #slowly increases the index so that switching images takes more time
+#        if player_index>=len(player_walk): player_index = 0
+#
+#        player_surf = player_walk[int(player_index)]
+
+#Snail
+#snail_frame1= pygame.image.load('pygame tutorial\snail1.png').convert_alpha()
+#snail_frame2 = pygame.image.load('pygame tutorial\snail2.png').convert_alpha()
+#snail_frames = [snail_frame1,snail_frame2]
+#snail_frame_index = 0
+#snail_surf = snail_frames[snail_frame_index]
+
+#Fly
+#fly_frame1 = pygame.image.load('pygame tutorial\Fly1.png').convert_alpha()
+#fly_frame2 = pygame.image.load('pygame tutorial\Fly2.png').convert_alpha()
+#fly_frames = [fly_frame1,fly_frame2]
+#fly_frame_index = 0
+#fly_surf = fly_frames[fly_frame_index]
+
+#obstacle_rect_list = []
+
+#player_walk_1 = pygame.image.load('pygame tutorial\player_walk_1.png').convert_alpha() #convert make image easier for python to process, alpha removes white space
+#player_walk_2 = pygame.image.load('pygame tutorial\player_walk_2.png').convert_alpha()
+#player_walk = [player_walk_1,player_walk_2]
+#player_index = 0
+#player_jump = pygame.image.load('pygame tutorial\jump.png').convert_alpha()
+
+#player_surf = player_walk[player_index]
+#player_rect = player_surf.get_rect(midbottom =(80,300))
+#player_gravity = 0
+
+#snail_animation_timer = pygame.USEREVENT +2
+#pygame.time.set_timer(snail_animation_timer,500)
+
+#fly_animation_timer = pygame.USEREVENT +3
+#pygame.time.set_timer(fly_animation_timer,200)
+
+
+ #       if game_active:
+ #           if event.type ==pygame.KEYDOWN: #references pressing a key
+ #               if event.key ==pygame.K_SPACE and player_rect.bottom >=300: #K_SPACE references the space bar
+#                    player_gravity = -20
+#
+ #           if event.type ==pygame.MOUSEBUTTONDOWN and player_rect.bottom >=300: #references clicking the mouse button
+ #               if player_rect.collidepoint(event.pos): #defines the colide point to be the mouse point and the player rectangle
+#                    player_gravity = -20
+
+#            if event.type ==snail_animation_timer:
+#                if snail_frame_index == 0: snail_frame_index = 1
+#                else: snail_frame_index = 0
+ #               snail_surf = snail_frames[snail_frame_index]
+#
+#            if event.type ==fly_animation_timer:
+ #               if fly_frame_index ==0: fly_frame_index = 1
+#                else: fly_frame_index =0
+#                fly_surf = fly_frames[fly_frame_index]
+
+
+   #     obstacle_rect_list.clear() #needed to reset objects to default positions or will continue to have collisions
+  #      player_rect.midbottom = (80,300) #resets player position
+   #     player_gravity = 0 #resets player gravity
